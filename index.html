@@ -2,69 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Sheet Data via HTML → JSON</title>
+  <title>Google Sheet → JSON (HTML Parser)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Arial, sans-serif; margin:20px; background:#f9f9f9; color:#333; }
-    table { width:100%; border-collapse:collapse; margin-top:20px; }
-    th, td { padding:10px; border:1px solid #ddd; text-align:left; }
-    thead { background:#f4f4f4; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+    }
+    pre {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 10px;
+      overflow-x: auto;
+    }
   </style>
 </head>
 <body>
 
-  <h1>Latest Sheet Entry</h1>
-  <pre id="json-output">Loading…</pre>
+  <h1>Google Sheet Data (Parsed from Published HTML)</h1>
+  <pre id="output">Loading data…</pre>
 
   <script>
-    // The published sheet URL (html version)
-    const sheetHtmlUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/pubhtml';
+    const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/pubhtml';
 
-    fetch(sheetHtmlUrl)
-      .then(res => res.text())
-      .then(htmlText => {
-        // Create a DOM parser
+    async function getSheetData() {
+      try {
+        const response = await fetch(sheetUrl);
+        const html = await response.text();
         const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, 'text/html');
-        // Find the first table in the published HTML
+        const doc = parser.parseFromString(html, 'text/html');
         const table = doc.querySelector('table');
+
         if (!table) {
-          document.getElementById('json-output').textContent = 'No table found in sheet HTML.';
+          document.getElementById('output').textContent = '❌ No table found in the published HTML.';
           return;
         }
-        // Extract header row (th or first row cells)
+
+        // Extract headers
         const headerCells = table.querySelectorAll('thead tr th');
         const headers = headerCells.length
           ? Array.from(headerCells).map(th => th.textContent.trim())
-          : // fallback if no thead
-            Array.from(table.querySelectorAll('tr:first-child td')).map(td => td.textContent.trim());
+          : Array.from(table.querySelectorAll('tr:first-child td')).map(td => td.textContent.trim());
 
-        // Extract body rows
-        const rows = Array.from(table.querySelectorAll('tbody tr'))
-          .map(tr => {
-            const cells = tr.querySelectorAll('td');
-            const obj = {};
-            cells.forEach((td, idx) => {
-              const key = headers[idx] || `col${idx+1}`;
-              obj[key] = td.textContent.trim();
-            });
-            return obj;
+        // Extract rows
+        const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+          const cells = tr.querySelectorAll('td');
+          const rowData = {};
+          cells.forEach((td, i) => {
+            const key = headers[i] || `Column ${i+1}`;
+            rowData[key] = td.textContent.trim();
           });
+          return rowData;
+        });
 
-        // Now you have JSON array
-        const data = rows;
-        document.getElementById('json-output').textContent = JSON.stringify(data, null, 2);
+        // Output JSON
+        document.getElementById('output').textContent = JSON.stringify(rows, null, 2);
 
-        // Optional: if you want the **last entry** only
-        if (data.length) {
-          const last = data[data.length - 1];
-          console.log('Last Entry:', last);
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching/parsing sheet HTML:', err);
-        document.getElementById('json-output').textContent = 'Error loading sheet data.';
-      });
+      } catch (error) {
+        console.error('Error fetching or parsing sheet:', error);
+        document.getElementById('output').textContent = '⚠️ Error fetching or parsing the Google Sheet.';
+      }
+    }
+
+    getSheetData();
   </script>
 
 </body>
