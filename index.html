@@ -50,43 +50,51 @@
     </table>
   </div>
 
+  <!-- Include PapaParse from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.5.3/papaparse.min.js"></script>
   <script>
-    const endpoint = 'https://docs.google.com/spreadsheets/d/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/gviz/tq?tqx=out:json&gid=0';
+    // URL to the published Google Sheet exported as CSV
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/export?format=csv';
 
-    fetch(endpoint)
-      .then(res => res.text())
-      .then(txt => {
-        // Strip the Google visualization wrapper
-        const jsonText = txt.substring(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
-        const json = JSON.parse(jsonText);
-        const cols = json.table.cols.map(c => c.label);
-        const rows = json.table.rows.map(r => r.c.map(cell => cell ? cell.v : ''));
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        const data = results.data;
+        if (!Array.isArray(data) || data.length === 0) {
+          document.getElementById('body-rows').innerHTML =
+            '<tr><td colspan="100%">No data available</td></tr>';
+          return;
+        }
 
-        // Populate header
-        const headerRow = document.getElementById('header-row');
-        cols.forEach(label => {
+        // Build header row
+        const headerRowElem = document.getElementById('header-row');
+        const keys = Object.keys(data[0]);
+        keys.forEach(key => {
           const th = document.createElement('th');
-          th.textContent = label;
-          headerRow.appendChild(th);
+          th.textContent = key;
+          headerRowElem.appendChild(th);
         });
 
-        // Populate body
-        const body = document.getElementById('body-rows');
-        rows.forEach(rowVals => {
+        // Build body rows
+        const bodyElem = document.getElementById('body-rows');
+        data.forEach(row => {
           const tr = document.createElement('tr');
-          rowVals.forEach(val => {
+          keys.forEach(key => {
             const td = document.createElement('td');
-            td.textContent = val;
+            td.textContent = row[key];
             tr.appendChild(td);
           });
-          body.appendChild(tr);
+          bodyElem.appendChild(tr);
         });
-      })
-      .catch(err => {
-        console.error('Error fetching sheet data:', err);
+      },
+      error: function(err) {
+        console.error('Error parsing CSV:', err);
         document.getElementById('body-rows').innerHTML =
           '<tr><td colspan="100%">Error loading data</td></tr>';
-      });
+      }
+    });
   </script>
 
 </body>
