@@ -2,99 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Live Sheet Data</title>
+  <title>Sheet Data via HTML → JSON</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f9f9f9;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .table-wrapper {
-      overflow-x: auto;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 40px;
-    }
-    table thead {
-      background: #f4f4f4;
-    }
-    table th, table td {
-      padding: 10px;
-      border: 1px solid #ddd;
-      text-align: left;
-    }
-    table tr:nth-child(even) {
-      background: #fff;
-    }
-    table tr:nth-child(odd) {
-      background: #fbfbfb;
-    }
+    body { font-family: Arial, sans-serif; margin:20px; background:#f9f9f9; color:#333; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; }
+    th, td { padding:10px; border:1px solid #ddd; text-align:left; }
+    thead { background:#f4f4f4; }
   </style>
 </head>
 <body>
 
-  <h1>Latest Data from Sheet</h1>
+  <h1>Latest Sheet Entry</h1>
+  <pre id="json-output">Loading…</pre>
 
-  <div class="table-wrapper">
-    <table id="sheet-data">
-      <thead><tr id="header-row"></tr></thead>
-      <tbody id="body-rows"></tbody>
-    </table>
-  </div>
-
-  <!-- Include PapaParse from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.5.3/papaparse.min.js"></script>
   <script>
-    // URL to the published Google Sheet exported as CSV
-    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/export?format=csv';
+    // The published sheet URL (html version)
+    const sheetHtmlUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIcOJTj-suQg97p2-OvP6vxV80tBgcfpnBBrerfZDhLFTd3e48N6zR0GuMqmEP1B8kICN2aIlrBuiP/pubhtml';
 
-    Papa.parse(csvUrl, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results) {
-        const data = results.data;
-        if (!Array.isArray(data) || data.length === 0) {
-          document.getElementById('body-rows').innerHTML =
-            '<tr><td colspan="100%">No data available</td></tr>';
+    fetch(sheetHtmlUrl)
+      .then(res => res.text())
+      .then(htmlText => {
+        // Create a DOM parser
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlText, 'text/html');
+        // Find the first table in the published HTML
+        const table = doc.querySelector('table');
+        if (!table) {
+          document.getElementById('json-output').textContent = 'No table found in sheet HTML.';
           return;
         }
+        // Extract header row (th or first row cells)
+        const headerCells = table.querySelectorAll('thead tr th');
+        const headers = headerCells.length
+          ? Array.from(headerCells).map(th => th.textContent.trim())
+          : // fallback if no thead
+            Array.from(table.querySelectorAll('tr:first-child td')).map(td => td.textContent.trim());
 
-        // Build header row
-        const headerRowElem = document.getElementById('header-row');
-        const keys = Object.keys(data[0]);
-        keys.forEach(key => {
-          const th = document.createElement('th');
-          th.textContent = key;
-          headerRowElem.appendChild(th);
-        });
-
-        // Build body rows
-        const bodyElem = document.getElementById('body-rows');
-        data.forEach(row => {
-          const tr = document.createElement('tr');
-          keys.forEach(key => {
-            const td = document.createElement('td');
-            td.textContent = row[key];
-            tr.appendChild(td);
+        // Extract body rows
+        const rows = Array.from(table.querySelectorAll('tbody tr'))
+          .map(tr => {
+            const cells = tr.querySelectorAll('td');
+            const obj = {};
+            cells.forEach((td, idx) => {
+              const key = headers[idx] || `col${idx+1}`;
+              obj[key] = td.textContent.trim();
+            });
+            return obj;
           });
-          bodyElem.appendChild(tr);
-        });
-      },
-      error: function(err) {
-        console.error('Error parsing CSV:', err);
-        document.getElementById('body-rows').innerHTML =
-          '<tr><td colspan="100%">Error loading data</td></tr>';
-      }
-    });
+
+        // Now you have JSON array
+        const data = rows;
+        document.getElementById('json-output').textContent = JSON.stringify(data, null, 2);
+
+        // Optional: if you want the **last entry** only
+        if (data.length) {
+          const last = data[data.length - 1];
+          console.log('Last Entry:', last);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching/parsing sheet HTML:', err);
+        document.getElementById('json-output').textContent = 'Error loading sheet data.';
+      });
   </script>
 
 </body>
